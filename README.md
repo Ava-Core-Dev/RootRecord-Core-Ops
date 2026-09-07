@@ -18,6 +18,10 @@ copies, or unreviewed personal data.
 - **RootRecord Core Node:** MIT-licensed public software that users can run locally.
 - **RootRecord Core Ops:** this local operator and transparency system; no license.
 - **RootRecord Core Processor:** hosted AVA/RootRecord runtime and long-running automation; no license.
+- **RootRecord RootMC:** all RootMC development; no license.
+
+RootMC development belongs in `RootRecord-RootMC`. Ops may expose approved
+operator controls or integration status, but it is not the RootMC source tree.
 
 ## Operational Rule
 

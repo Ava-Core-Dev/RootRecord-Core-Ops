@@ -4,6 +4,8 @@ The RootRecord developer and operator desk. This repository is public for
 transparency and operational understanding, but it is not licensed for
 redistribution.
 
+![RootRecord banner](media/banner.jpg)
+
 ## Role
 
 Ops stays on the operator's laptop. It owns the human-facing control surface,
@@ -28,6 +30,15 @@ operator controls or integration status, but it is not the RootMC source tree.
 The desk controls and observes the Processor. It does not silently become the
 Processor. Local database backups, restore points, and operator approvals remain
 available through the desk even when the hosted runtime is unavailable.
+
+## First Run
+
+Run `install.ps1` on Windows or `./install.sh` on Ubuntu/Debian. Both invoke
+`core/boot.py`, create missing runtime paths, install changed manifest
+dependencies, and show every step in the terminal while writing `.runtime/logs/`.
+The Ops developer checkout may opt into `ROOTRECORD_AUTO_PUSH=1` and run
+`scripts/register-auto-push.ps1` for the same two-minute safe commit/push
+behavior used by AVA.
 
 ## Lore
 

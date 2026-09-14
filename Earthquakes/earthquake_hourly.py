@@ -19,7 +19,7 @@ from apps.core import config
 
 log = logging.getLogger("ava.earthquake_hourly")
 HST = ZoneInfo("Pacific/Honolulu")
-REPORTS_ROOT = Path.home() / "RootRecord Core Ops" / "Chronology" / "Reports"
+REPORTS_ROOT = Path.home() / "RootRecord Core Ops" / "Reports"
 
 STATE_PATH = config.DATA_DIR / "state" / "earthquake-hourly.json"
 USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query"

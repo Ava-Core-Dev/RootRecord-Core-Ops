@@ -27,7 +27,7 @@ HANS_NOTICE = "https://volcanoes.usgs.gov/hans-public/notice/{id}"
 HVO_UA = {"User-Agent": "AvaIvy/2.0 rootmc.net"}
 
 _last_hash: str = ""
-REPORTS_ROOT = Path.home() / "RootRecord Core Ops" / "Chronology" / "Reports"
+REPORTS_ROOT = Path.home() / "RootRecord Core Ops" / "Reports"
 
 MULTIPLIERS = {
     "normal":   1.0,

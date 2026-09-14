@@ -14,7 +14,7 @@ import httpx
 log = logging.getLogger("rootrecord.weather")
 
 HST = ZoneInfo("Pacific/Honolulu")
-REPORTS_ROOT = Path.home() / "RootRecord Core Ops" / "Chronology" / "Reports"
+REPORTS_ROOT = Path.home() / "RootRecord Core Ops" / "Reports"
 NWS_POINT_URL = "https://api.weather.gov/points/19.5429,-155.0372"
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active?area=HI"
 _last_hash: str = ""

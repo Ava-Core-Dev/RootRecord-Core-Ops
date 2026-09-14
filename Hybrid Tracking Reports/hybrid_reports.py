@@ -23,7 +23,7 @@ from apps.core.services.data_layout import (
 )
 
 SOLAR_NOTES_CUTOFF = "+++Automation Cut Off"
-HYBRID_REPORT_ROOT = Path.home() / "RootRecord Core Ops" / "Chronology" / "Reports"
+HYBRID_REPORT_ROOT = Path.home() / "RootRecord Core Ops" / "Reports"
 HYBRID_CHARGE_STATE_PATH = config.DATA_DIR / "state" / "hybrid-charge-status.json"
 HYBRID_REPORT_LINE_LIMIT = 111
 
@@ -47,6 +47,20 @@ def _automated_lines(stamp: str, content: str) -> str:
         ) or [""]
         lines.extend(f"{prefix}{line}" for line in wrapped)
     return "\n".join(lines)
+
+
+def _automated_section(stamp: str, title: str, items: list[tuple[str, str]]) -> str:
+    lines = [f"> ◇ **{stamp}** — {title}", ""]
+    for heading, detail in items:
+        lines.append(f"**{heading}**  ")
+        lines.extend(textwrap.wrap(
+            re.sub(r"\s+", " ", detail).strip(),
+            width=HYBRID_REPORT_LINE_LIMIT,
+            break_long_words=False,
+            break_on_hyphens=False,
+        ))
+        lines.append("")
+    return "\n".join(lines).rstrip()
 
 
 def _hybrid_report_template(now: datetime) -> str:
@@ -342,6 +356,28 @@ def append_hybrid_lifecycle_event(event: str, now: datetime | None = None) -> di
     return {"ok": True, "path": str(target), "detail": "inserted" if inserted else "already_present", "line": line}
 
 
+def append_ecoflow_automation_event(event: str, now: datetime | None = None) -> dict:
+    """Append one verified EcoFlow automation transition to the live report."""
+    from zoneinfo import ZoneInfo
+
+    allowed = {"GENERATOR STARTED", "GENERATOR STOPPED", "TRANSFER STARTED", "TRANSFER STOPPED"}
+    normalized = " ".join(str(event or "").upper().split())
+    if normalized not in allowed:
+        return {"ok": False, "detail": "invalid_ecoflow_event", "event": event}
+    now = now or datetime.now(ZoneInfo("Pacific/Honolulu"))
+    target = hybrid_daily_report_path(now)
+    if not target.is_file():
+        return {"ok": False, "detail": "hybrid_report_missing", "path": str(target)}
+    body = target.read_text(encoding="utf-8", errors="replace")
+    if SOLAR_NOTES_CUTOFF not in body:
+        return {"ok": False, "detail": "automation_cutoff_missing", "path": str(target)}
+    line = _automated_lines(now.strftime("%H%M"), f"ECOFLOW AUTOMATION — {normalized}")
+    updated, inserted = _append_report_inserts(body, [line])
+    if inserted:
+        target.write_text(updated, encoding="utf-8", newline="\n")
+    return {"ok": True, "path": str(target), "detail": "inserted" if inserted else "already_present", "line": line}
+
+
 def _hybrid_prediction_inserts(stamp: str) -> tuple[str | None, str | None]:
     weather_insert = None
     kilauea_insert = None
@@ -356,17 +392,24 @@ def _hybrid_prediction_inserts(stamp: str) -> tuple[str | None, str | None]:
                 period_lines = [re.sub(r"\s+", " ", line).strip() for line in match.group(2).splitlines() if line.strip()]
                 if len(period_lines) >= 2:
                     periods.append((match.group(1), period_lines[0], period_lines[1]))
-            windows = [f"{name.strip()}: {summary} | {detail}" for name, summary, detail in periods[:4]]
+            windows = [(f"{name.strip()}: {summary}", detail) for name, summary, detail in periods[:4]]
             alerts = re.findall(r"\*\*([^*]+)\*\*[^\n]*\n([^\n]*\buntil\b[^\n]+)", weather_body, re.I)
-            windows.extend(f"ALERT {name.strip()}: {re.sub(r'\s+', ' ', window).strip()}" for name, window in alerts[:8])
+            windows.extend(
+                (f"ALERT — {name.strip()}", re.sub(r"\s+", " ", window).strip())
+                for name, window in alerts[:8]
+            )
             if windows:
-                weather_insert = _automated_lines(stamp, "WEATHER WINDOWS — " + "\n".join(windows))
+                weather_insert = _automated_section(stamp, "WEATHER WINDOWS", windows)
 
         kilauea_report = latest_report("kilauea-*.md")
         if kilauea_report:
             kilauea_body = re.sub(r"\s+", " ", kilauea_report.read_text(encoding="utf-8", errors="replace")).strip()
             if kilauea_body:
-                kilauea_insert = _automated_lines(stamp, "KILAUEA PREDICTION — " + kilauea_body[:900])
+                kilauea_insert = _automated_section(
+                    stamp,
+                    "KILAUEA PREDICTION",
+                    [("Status", kilauea_body[:900])],
+                )
     except Exception:
         pass
     return weather_insert, kilauea_insert
@@ -426,9 +469,20 @@ def update_solar_notes(now: datetime | None = None, path: Path | None = None) ->
             if at_ms is None or at_ms > now_ms or at_ms < start_ms:
                 continue
             try:
-                sample = {"in_w": float(row.get("solarW")) if row.get("solarW") is not None else None, "out_w": float(row.get("outW")) if row.get("outW") is not None else None, "soc": float(row.get("soc")) if row.get("soc") is not None else None, "at_ms": at_ms}
+                sample = {"solar_w": float(row.get("solarW")) if row.get("solarW") is not None else None, "in_w": float(row.get("inW")) if row.get("inW") is not None else None, "out_w": float(row.get("outW")) if row.get("outW") is not None else None, "soc": float(row.get("soc")) if row.get("soc") is not None else None, "at_ms": at_ms}
             except (TypeError, ValueError):
                 continue
+            # A shared Delta AC-output ghost can show up as River "inW" with zero
+            # River load and zero River PV. That is not pack charging and must not
+            # be counted as River intake.
+            if (
+                role == "river"
+                and sample.get("in_w") is not None
+                and sample.get("in_w") > 0
+                and sample.get("solar_w") in (None, 0)
+                and sample.get("out_w") in (None, 0)
+            ):
+                sample["in_w"] = 0.0
             samples[role].append(sample)
             if role not in latest or at_ms > latest[role]["at_ms"]:
                 latest[role] = sample
@@ -515,6 +569,7 @@ def update_hybrid_charge_status(now: datetime | None = None) -> dict:
 __all__ = [
     "HYBRID_REPORT_ROOT",
     "append_hybrid_lifecycle_event",
+    "append_ecoflow_automation_event",
     "ensure_hybrid_daily_report",
     "hybrid_daily_report_path",
     "update_hybrid_charge_status",
